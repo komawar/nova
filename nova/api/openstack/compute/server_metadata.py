@@ -161,21 +161,22 @@ class Controller(object):
 
     def _handle_quota_error(self, error):
         """Reraise quota errors as api-specific http exceptions."""
-        code_mappings = {
-            "MetadataKeyValueLimitExceeded":
-                    _("Metadata property key or value greater than 255 "
-                    "characters"),
-            "MetadataKeyUnspecified":
-                    _("Metadata property key blank"),
-            "MetadataLimitExceeded":
-                    error.message % error.kwargs
-        }
-        expl = code_mappings.get(error.kwargs['code'])
-        if expl:
-            raise exc.HTTPRequestEntityTooLarge(explanation=expl,
-                                                headers={'Retry-After': 0})
-        raise error
+        headers = {'Retry-After': 0}
+        code = error.kwargs['code']
 
+        if code == "MetadataLimitExceeded":
+            expl = error.message % error.kwargs
+            raise exc.HTTPRequestEntityTooLarge(explanation=expl, \
+                                                headers=headers)
+        elif code == "MetadataKeyValueLimitExceeded":
+            expl = _("Metadata property key or value greater than 255 "
+                     "characters")
+            raise exc.HTTPBadRequest(explanation=expl, headers=headers)
+        elif code == "MetadataKeyUnspecified":
+            expl = _("Metadata property key blank")
+            raise exc.HTTPBadRequest(explanation=expl, headers=headers)
+        else:
+            raise error
 
-def create_resource():
-    return wsgi.Resource(Controller())
+    def create_resource():
+        return wsgi.Resource(Controller())
