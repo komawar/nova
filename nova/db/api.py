@@ -352,9 +352,9 @@ def dnsdomain_get(context, fqdomain):
 ####################
 
 
-def migration_update(context, id, values):
+def migration_update(context, id, values, not_if={}):
     """Update a migration instance."""
-    return IMPL.migration_update(context, id, values)
+    return IMPL.migration_update(context, id, values, not_if)
 
 
 def migration_create(context, values):
@@ -602,13 +602,14 @@ def instance_test_and_set(context, instance_id, attr, ok_states,
             context, instance_id, attr, ok_states, new_state)
 
 
-def instance_update(context, instance_id, values):
+def instance_update(context, instance_id, values, not_if={}):
     """Set the given properties on an instance and update it.
 
     Raises NotFound if instance does not exist.
+    Raises PreconditionNotMet if update preconditions are not met.
 
     """
-    return IMPL.instance_update(context, instance_id, values)
+    return IMPL.instance_update(context, instance_id, values, not_if)
 
 
 def instance_add_security_group(context, instance_id, security_group_id):

@@ -418,6 +418,71 @@ def _create_aggregate_with_hosts(context=context.get_admin_context(),
     return result
 
 
+class InstanceUpdatePreconditionsTests(test.TestCase):
+
+    def test_instance_update_precondition_met(self):
+        ctxt = context.get_admin_context()
+        values = {'vm_state': 'active', 'task_state': 'none'}
+        instance = db.instance_create(ctxt, values)
+        instance = db.instance_update(ctxt, instance['uuid'],
+                                      {'vm_state': 'resize'},
+                                      not_if={'vm_state': 'error'})
+        self.assertEqual(instance['vm_state'], 'resize')
+
+    def test_instance_update_precondition_unmet(self):
+        ctxt = context.get_admin_context()
+        values = {'vm_state': 'error', 'task_state': 'none'}
+        instance = db.instance_create(ctxt, values)
+        self.assertRaises(exception.PreconditionNotMet, db.instance_update,
+                          ctxt, instance['uuid'], {'vm_state': 'resize'},
+                          not_if={'vm_state': 'error'})
+
+    def test_instance_update_not_found_with_preconditions(self):
+        ctxt = context.get_admin_context()
+        instance_uuid = str(utils.gen_uuid())
+        self.assertRaises(exception.InstanceNotFound, db.instance_update,
+                          ctxt, instance_uuid, {'vm_state': 'resize'},
+                          not_if={'vm_state': 'error'})
+
+    def test_instance_update_deleted_with_preconditions(self):
+        ctxt = context.get_admin_context(read_deleted='no')
+        values = {'vm_state': 'error', 'deleted': True}
+        instance = db.instance_create(ctxt, values)
+        self.assertRaises(exception.InstanceNotFound, db.instance_update,
+                          ctxt, instance['uuid'], {'vm_state': 'resize'},
+                          not_if={'vm_state': 'error'})
+
+    def test_instance_update_metadata_with_preconditions_fails(self):
+        ctxt = context.get_admin_context(read_deleted='no')
+        instance = db.instance_create(ctxt, {})
+        self.assertRaises(NotImplementedError, db.instance_update,
+                          ctxt, instance['uuid'],
+                          {'metadata': {'foo': 'bar'}},
+                          not_if={'key': 'value'})
+
+
+class MigrationUpdatePreconditionTest(test.TestCase):
+    def test_migration_update_precondition_met(self):
+        ctxt = context.get_admin_context()
+        migration = db.migration_create(ctxt, {'status': 'foo'})
+        update = db.migration_update(ctxt, migration['id'], {'status': 'bar'},
+                                     not_if={'status': 'baz'})
+        self.assertEquals(update['status'], 'bar')
+
+    def test_migration_update_precondition_unmet(self):
+        ctxt = context.get_admin_context()
+        migration = db.migration_create(ctxt, {'status': 'baz'})
+        self.assertRaises(exception.PreconditionNotMet, db.migration_update,
+                          ctxt, migration['id'], {'status': 'bar'},
+                          not_if={'status': 'baz'})
+
+    def test_migration_does_not_exist(self):
+        ctxt = context.get_admin_context()
+        self.assertRaises(exception.MigrationNotFound, db.migration_update,
+                          ctxt, 987654321, {'status': 'bar'},
+                          not_if={'status': 'baz'})
+
+
 class AggregateDBApiTestCase(test.TestCase):
     def setUp(self):
         super(AggregateDBApiTestCase, self).setUp()

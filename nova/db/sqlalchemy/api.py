@@ -1627,7 +1627,12 @@ def instance_test_and_set(context, instance_id, attr, ok_states,
 
 
 @require_context
-def instance_update(context, instance_id, values):
+def instance_update(context, instance_id, values, not_if={}):
+
+    if not_if:
+        return _instance_update_with_preconditions(context, instance_id,
+                                                   values, not_if)
+
     session = get_session()
 
     if utils.is_uuid_like(instance_id):
@@ -1652,6 +1657,41 @@ def instance_update(context, instance_id, values):
         instance_ref.save(session=session)
 
     return instance_ref
+
+
+def _instance_update_with_preconditions(context, instance_id, values, not_if):
+    if 'metadata' in values or 'system_metadata' in values:
+        #NOTE(markwash): Just no way to make instance condition checking and
+        # metadata updates atomic at this time. But fortunately nobody needs
+        # that right now. *fingers crossed*
+        raise NotImplementedError
+
+    session = get_session()
+
+    uuid_like = utils.is_uuid_like(instance_id)
+
+    query = model_query(context, models.Instance, session=session)
+    if uuid_like:
+        query = query.filter(models.Instance.uuid == instance_id)
+    else:
+        query = query.filter(models.Instance.id == instance_id)
+    for key, value in not_if.iteritems():
+        query = query.filter(getattr(models.Instance, key) != value)
+    count = query.update(values)
+
+    if uuid_like:
+        instance = instance_get_by_uuid(context, instance_id, session=session)
+    else:
+        instance = instance_get(context, instance_id, session=session)
+
+    #NOTE(markwash): if the instance just doesn't exist, we let the
+    # instance_get_* functions above handle raising the exception. That way, if
+    # we got this far and no rows were affected by the update, then it was only
+    # because the preconditions on the instance were not met
+    if count == 0:
+        raise exception.PreconditionNotMet
+
+    return instance
 
 
 def instance_add_security_group(context, instance_uuid, security_group_id):
@@ -3346,13 +3386,21 @@ def migration_create(context, values):
 
 
 @require_admin_context
-def migration_update(context, id, values):
+def migration_update(context, id, values, not_if={}):
     session = get_session()
-    with session.begin():
-        migration = migration_get(context, id, session=session)
-        migration.update(values)
-        migration.save(session=session)
-        return migration
+
+    query = model_query(context, models.Migration, session=session)
+
+    query = query.filter(models.Migration.id == id)
+    for key, value in not_if.iteritems():
+        query = query.filter(getattr(models.Migration, key) != value)
+    count = query.update(values)
+
+    migration = migration_get(context, id, session=session)
+    if not count:
+        raise exception.PreconditionNotMet
+
+    return migration
 
 
 @require_admin_context

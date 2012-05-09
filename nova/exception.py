@@ -420,6 +420,11 @@ class InvalidEc2Id(Invalid):
     message = _("Ec2 id %(ec2_id)s is unacceptable.")
 
 
+class PreconditionNotMet(NovaException):
+    message = _("Precondition not met.")
+    code = 409
+
+
 class NotFound(NovaException):
     message = _("Resource could not be found.")
     code = 404
