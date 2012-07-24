@@ -807,6 +807,7 @@ class Controller(wsgi.Controller):
             raise exc.HTTPNotFound()
 
         instance.update(update_dict)
+        notifications.send_access_ip_update(context, instance)
 
         self._add_instance_faults(ctxt, [instance])
         return self._view_builder.show(req, instance)
@@ -1077,6 +1078,8 @@ class Controller(wsgi.Controller):
             raise exc.HTTPBadRequest(explanation=unicode(error))
         except exception.InstanceTypeDiskTooSmall as error:
             raise exc.HTTPBadRequest(explanation=unicode(error))
+
+        notifications.send_access_ip_update(context, instance)
 
         instance = self._get_server(context, req, id)
 

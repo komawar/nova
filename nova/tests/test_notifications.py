@@ -75,6 +75,8 @@ class NotificationsTestCase(test.TestCase):
         inst['instance_type_id'] = type_id
         inst['root_gb'] = 0
         inst['ephemeral_gb'] = 0
+        inst['access_ip_v4'] = '1.2.3.4'
+        inst['access_ip_v6'] = 'feed::5eed'
         if params:
             inst.update(params)
         return db.instance_create(self.context, inst)
@@ -156,6 +158,8 @@ class NotificationsTestCase(test.TestCase):
         self.assertEquals(vm_states.ACTIVE, payload["state"])
         self.assertEquals(task_states.SPAWNING, payload["old_task_state"])
         self.assertEquals(task_states.SPAWNING, payload["new_task_state"])
+        self.assertEquals(payload["access_ip_v4"], instance["access_ip_v4"])
+        self.assertEquals(payload["access_ip_v6"], instance["access_ip_v6"])
 
     def test_task_update_with_states(self):
 
@@ -170,6 +174,8 @@ class NotificationsTestCase(test.TestCase):
         self.assertEquals(vm_states.BUILDING, payload["state"])
         self.assertEquals(task_states.SPAWNING, payload["old_task_state"])
         self.assertEquals(None, payload["new_task_state"])
+        self.assertEquals(payload["access_ip_v4"], instance["access_ip_v4"])
+        self.assertEquals(payload["access_ip_v6"], instance["access_ip_v6"])
 
     def test_update_no_service_name(self):
         notifications.send_update_with_states(self.context, self.instance,
@@ -206,3 +212,12 @@ class NotificationsTestCase(test.TestCase):
                                                   self.net_info, None)
         self.assertTrue("fixed_ips" in usage)
         self.assertEquals(usage["fixed_ips"][0]["label"], "test1")
+
+    def test_send_access_ip_update(self):
+        notifications.send_access_ip_update(self.context, self.instance)
+        self.assertEquals(1, len(test_notifier.NOTIFICATIONS))
+        notif = test_notifier.NOTIFICATIONS[0]
+        payload = notif["payload"]
+
+        self.assertEquals(payload["access_ip_v4"], instance["access_ip_v4"])
+        self.assertEquals(payload["access_ip_v6"], instance["access_ip_v6"])

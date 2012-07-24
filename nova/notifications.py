@@ -109,6 +109,10 @@ def _send_instance_update_notification(context, instance, old_vm_state,
     bw = bandwidth_usage(instance, audit_start)
     payload["bandwidth"] = bw
 
+    # add access_ip_v4 and access_ip_v6 info:
+    payload["access_ip_v4"] = instance["access_ip_v4"]
+    payload["access_ip_v6"] = instance["access_ip_v6"]
+
     # if the service name (e.g. api/scheduler/compute) is not provided, default
     # to "compute"
     if not service:
@@ -282,3 +286,23 @@ def usage_from_instance(context, instance_ref, network_info,
 
     usage_info.update(kw)
     return usage_info
+
+def send_access_ip_update(context, instance, service=None, host=None):
+    """Send 'compute.instance.update' notification to inform observers
+    about access_ip changes"""
+
+    payload = {}
+
+    # add access_ip_v4 and access_ip_v6 info:
+    payload["access_ip_v4"] = instance["access_ip_v4"]
+    payload["access_ip_v6"] = instance["access_ip_v6"]
+
+    # if the service name (e.g. api/scheduler/compute) is not provided, default
+    # to "compute"
+    if not service:
+        service = "compute"
+
+    publisher_id = notifier_api.publisher_id(service, host)
+
+    notifier_api.notify(context, publisher_id, 'compute.instance.update',
+            notifier_api.INFO, payload)
