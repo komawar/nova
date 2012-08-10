@@ -245,7 +245,7 @@ def image_meta(system_metadata):
 
 
 def info_from_instance(context, instance_ref, network_info,
-                system_metadata, **kw):
+                system_metadata, metadata=None, **kw):
     """Get detailed instance information for an instance which is common to all
     notifications.
 
@@ -269,6 +269,13 @@ def info_from_instance(context, instance_ref, network_info,
 
         except exception.NotFound:
             system_metadata = {}
+
+    if metadata is None:
+        try:
+            metadata = db.instance_metadata_get(context, instance_ref['uuid'])
+
+        except exception.NotFound:
+            metadata = {}
 
     instance_info = dict(
         # Owner properties
@@ -333,6 +340,9 @@ def info_from_instance(context, instance_ref, network_info,
     # add image metadata
     image_meta_props = image_meta(system_metadata)
     instance_info["image_meta"] = image_meta_props
+
+    # add instance metadata
+    instance_info['metadata'] = metadata
 
     instance_info.update(kw)
     return instance_info

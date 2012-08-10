@@ -66,6 +66,9 @@ class NotificationsTestCase(test.TestCase):
         test_notifier.NOTIFICATIONS = []
 
         self.instance = self._wrapped_create()
+        self.metadata = {'foo': 'bar', 'bar': 'baz'}
+        db.instance_metadata_update(self.context,
+                self.instance['uuid'], self.metadata, None)
 
     def tearDown(self):
         notifier_api._reset_drivers()
@@ -250,7 +253,7 @@ class NotificationsTestCase(test.TestCase):
 
     def test_payload_has_fixed_ip_labels(self):
         info = notifications.info_from_instance(self.context, self.instance,
-                                                  self.net_info, None)
+                self.net_info, None, None)
         self.assertTrue("fixed_ips" in info)
         self.assertEquals(info["fixed_ips"][0]["label"], "test1")
 
@@ -273,6 +276,15 @@ class NotificationsTestCase(test.TestCase):
         display_name = self.instance["display_name"]
 
         self.assertEquals(payload["display_name"], display_name)
+
+    # metadata by default must be in the notification payload
+    def test_send_metadata_update(self):
+        notifications.send_update(self.context, self.instance, self.instance)
+        self.assertEquals(1, len(test_notifier.NOTIFICATIONS))
+        notif = test_notifier.NOTIFICATIONS[0]
+        payload = notif["payload"]
+
+        self.assertEquals(payload["metadata"], self.metadata)
 
     def test_send_no_state_change(self):
         called = [False]

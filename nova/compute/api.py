@@ -1792,6 +1792,7 @@ class API(base.Base):
         self._check_metadata_properties_quota(context, _metadata)
         self.db.instance_metadata_update(context, instance['uuid'],
                                          _metadata, True)
+        notifications.send_update(context, instance, instance)
         diff = utils.diff_dict(orig, _metadata)
         self.compute_rpcapi.change_instance_metadata(context,
                                                      instance=instance,
