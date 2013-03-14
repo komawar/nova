@@ -29,7 +29,7 @@ from nova import test
 from nova.tests.api.openstack import fakes
 
 
-OS-SI = 'OS-SI:image_schedule'
+OS_SI = 'OS-SI:image_schedule'
 
 
 class ScheduledImagesPolicyTest(test.TestCase):
@@ -137,7 +137,7 @@ class ScheduledImagesTest(test.TestCase):
 
 class ScheduledImagesFilterTest(test.TestCase):
     def setUp(self):
-        super(ScheduledImagesTest, self).setUp()
+        super(ScheduledImagesFilterTest, self).setUp()
         self.controller = scheduled_images.ScheduledImagesFilterController()
         self.uuid_1 = 'b04ac9cd-f78f-4376-8606-99f3bdb5d0ae'
         self.uuid_2 = '6b8b2aa4-ae7b-4cd0-a7f9-7fa6d5b0195a'
@@ -194,14 +194,14 @@ class ScheduledImagesFilterTest(test.TestCase):
             def fake_instance_get_for_create(context, id_, *args, **kwargs):
                 return (inst, inst)
 
-            self.stubs.Set(nova.db, 'instance_update_and_get_original',
+            self.stubs.Set(db, 'instance_update_and_get_original',
                           fake_instance_get_for_create)
 
             def fake_instance_get_all_for_create(context, *args, **kwargs):
                 return [inst]
-            self.stubs.Set(nova.db, 'instance_get_all',
+            self.stubs.Set(db, 'instance_get_all',
                            fake_instance_get_all_for_create)
-            self.stubs.Set(nova.db, 'instance_get_all_by_filters',
+            self.stubs.Set(db, 'instance_get_all_by_filters',
                            fake_instance_get_all_for_create)
 
         self.app = compute.APIRouter(init_only=('servers'))
@@ -227,8 +227,8 @@ class ScheduledImagesFilterTest(test.TestCase):
                 fake_instance_system_metadata_update)
 
     def assertScheduledImages(self, dict_, value):
-        self.assert_(OS-SI in dict_)
-        self.assertEqual(dict_[OS-SI], value)
+        self.assert_(OS_SI in dict_)
+        self.assertEqual(dict_[OS_SI], value)
 
     def test_index_servers_with_true_query(self):
         query = 'OS-SI:image_schedule=True'
@@ -236,7 +236,7 @@ class ScheduledImagesFilterTest(test.TestCase):
         req = fakes.HTTPRequest.blank(query)
         resp_obj = {'servers': [{'id': self.uuid_1}, {'id': self.uuid_2}]}
         res = self.controller.index(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]
+        expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]}
         self.assertEqual(res, expect)
 
     def test_index_servers_with_false_query(self):
@@ -245,7 +245,7 @@ class ScheduledImagesFilterTest(test.TestCase):
         req = fakes.HTTPRequest.blank(query)
         resp_obj = {'servers': [{'id': self.uuid_1}, {'id': self.uuid_2}]}
         res = self.controller.index(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_2}]
+        expect = {'servers': [{'id': self.uuid_2}]}
         self.assertEqual(res, expect)
 
     def test_show_server(self):
@@ -253,11 +253,11 @@ class ScheduledImagesFilterTest(test.TestCase):
             '/fake/servers/%s' % self.uuid_1)
         res = req.get_response(self.app)
         server_dict = jsonutils.loads(res.body)['server']
-        self.assertScheduledImages(server_dict, 6)
+        self.assertScheduledImages(server_dict, '6')
 
         #resp_obj = {'servers': [{'id': self.uuid_1}]}
         #res = self.controller.show(req, resp_obj, self.uuid_1)
-        #expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]
+        #expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]}
         #self.assertEqual(res, expect)
 
     def test_detail_servers(self):

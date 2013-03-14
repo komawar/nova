@@ -159,7 +159,7 @@ policy_data = """
     "compute_extension:quota_classes": "",
     "compute_extension:rescue": "",
     "compute_extension:scheduled_images": "",
-    "compute_extension:scheduled_images_filter": "rule:admin_or_owner",
+    "compute_extension:scheduled_images_filter": "",
     "compute_extension:security_group_default_rules": "",
     "compute_extension:security_groups": "",
     "compute_extension:server_diagnostics": "",
