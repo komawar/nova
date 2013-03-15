@@ -19,6 +19,7 @@ import uuid
 from lxml import etree
 from webob import exc
 
+from nova.compute import api as compute_api
 from nova.api.openstack import compute
 from nova.api.openstack.compute.contrib import scheduled_images
 from nova import db
@@ -103,6 +104,38 @@ class ScheduledImagesTest(test.TestCase):
     def setUp(self):
         super(ScheduledImagesTest, self).setUp()
         self.controller = scheduled_images.ScheduledImagesController()
+        self.uuid_1 = 'b04ac9cd-f78f-4376-8606-99f3bdb5d0ae'
+        self.uuid_2 = '6b8b2aa4-ae7b-4cd0-a7f9-7fa6d5b0195a'
+        FAKE_INSTANCES = [
+            fakes.stub_instance(1,
+                                uuid=self.uuid_1,
+                                auto_disk_config=False),
+            fakes.stub_instance(2,
+                                uuid=self.uuid_2,
+                                auto_disk_config=True)
+        ]
+
+        def fake_instance_get(context, id_):
+            for instance in FAKE_INSTANCES:
+                if id_ == instance['id']:
+                    return instance
+
+        self.stubs.Set(db, 'instance_get', fake_instance_get)
+
+        def fake_instance_get_by_uuid(context, uuid):
+            for instance in FAKE_INSTANCES:
+                if uuid == instance['uuid']:
+                    return instance
+
+        self.stubs.Set(db, 'instance_get_by_uuid',
+                       fake_instance_get_by_uuid)
+
+        def fake_instance_get_all(context, *args, **kwargs):
+            return FAKE_INSTANCES
+
+        self.stubs.Set(db, 'instance_get_all', fake_instance_get_all)
+        self.stubs.Set(db, 'instance_get_all_by_filters',
+                       fake_instance_get_all)
 
         def fake_instance_system_metadata_get(context, instance_id):
             return {'OS-SI:image_schedule': '6'}
@@ -119,18 +152,18 @@ class ScheduledImagesTest(test.TestCase):
                 fake_instance_system_metadata_update)
 
     def test_get_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
         res = self.controller.index(req, self.uuid_1)
-        self.assertEqual(res, {"image-schedule": {"retention": "6"}})
+        self.assertEqual(res, {"image_schedule": {"retention": "6"}})
 
     def test_post_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
         body = {"image_schedule": {"retention": "7"}}
         res = self.controller.create(req, self.uuid_1, body)
-        self.assertEqual(res, {"image-schedule": {"retention": "7"}})
+        self.assertEqual(res, {"image_schedule": {"retention": "7"}})
 
     def test_delete_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
         res = self.controller.delete(req, self.uuid_1)
         self.assertEqual(res.status_int, 202)
 
@@ -183,13 +216,9 @@ class ScheduledImagesFilterTest(test.TestCase):
             inst['created_at'] = datetime.datetime(2010, 10, 10, 12, 0, 0)
             inst['updated_at'] = datetime.datetime(2010, 10, 10, 12, 0, 0)
             inst['progress'] = 0
-            inst['name'] = 'instance-1'  # this is a property
+            inst['name'] = 'instance-1'
             inst['task_state'] = ''
             inst['vm_state'] = ''
-            # NOTE(vish): db create translates security groups into model
-            #             objects. Translate here so tests pass
-            #inst['security_groups'] = [{'name': group}
-            #                           for group in inst['security_groups']]
 
             def fake_instance_get_for_create(context, id_, *args, **kwargs):
                 return (inst, inst)
@@ -226,76 +255,70 @@ class ScheduledImagesFilterTest(test.TestCase):
         self.stubs.Set(db, 'instance_system_metadata_update',
                 fake_instance_system_metadata_update)
 
-    def assertScheduledImages(self, dict_, value):
-        self.assert_(OS_SI in dict_)
-        self.assertEqual(dict_[OS_SI], value)
+        def fake_delete(cls, context, id_):
+            return
+
+        self.stubs.Set(compute_api.API, 'delete', fake_delete)
+
+    def assertScheduledImages(self, dict_, value, is_present=True):
+        if is_present:
+            self.assert_(OS_SI in dict_)
+            self.assertEqual(dict_[OS_SI], value)
+        else:
+            self.assert_(OS_SI not in dict_)
 
     def test_index_servers_with_true_query(self):
         query = 'OS-SI:image_schedule=True'
-        url = '/v2/123/servers?%s' % query
-        req = fakes.HTTPRequest.blank(query)
-        resp_obj = {'servers': [{'id': self.uuid_1}, {'id': self.uuid_2}]}
-        res = self.controller.index(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]}
-        self.assertEqual(res, expect)
+        req = fakes.HTTPRequest.blank('/fake/servers?%s' % query)
+        res = req.get_response(self.app)
+        servers = jsonutils.loads(res.body)['servers']
+        for server in servers:
+            self.assertScheduledImages(server, '6', is_present=True)
 
     def test_index_servers_with_false_query(self):
         query = 'OS-SI:image_schedule=False'
-        url = '/v2/123/servers?%s' % query
-        req = fakes.HTTPRequest.blank(query)
-        resp_obj = {'servers': [{'id': self.uuid_1}, {'id': self.uuid_2}]}
-        res = self.controller.index(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_2}]}
-        self.assertEqual(res, expect)
+        req = fakes.HTTPRequest.blank('/fake/servers?%s' % query)
+        res = req.get_response(self.app)
+        servers = jsonutils.loads(res.body)['servers']
+        for server in servers:
+            self.assertScheduledImages(server, '6', is_present=False)
 
     def test_show_server(self):
         req = fakes.HTTPRequest.blank(
             '/fake/servers/%s' % self.uuid_1)
         res = req.get_response(self.app)
-        server_dict = jsonutils.loads(res.body)['server']
-        self.assertScheduledImages(server_dict, '6')
-
-        #resp_obj = {'servers': [{'id': self.uuid_1}]}
-        #res = self.controller.show(req, resp_obj, self.uuid_1)
-        #expect = {'servers': [{'id': self.uuid_1, 'OS-SI:image_schedule': '6'}]}
-        #self.assertEqual(res, expect)
+        server = jsonutils.loads(res.body)['server']
+        self.assertScheduledImages(server, '6', is_present=True)
 
     def test_detail_servers(self):
-        req = fakes.HTTPRequest.blank('/v2/123/servers/detail')
-        resp_obj = {'servers': [{'id': self.uuid_1, 'foo': 'bar'},
-                                {'id': self.uuid_2, 'baz': 'qux'}]}
-        res = self.controller.detail(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_1,
-                               'OS-SI:image_schedule': '6',
-                               'foo': 'bar',
-                              },
-                              {'id': self.uuid_2,
-                               'baz': 'qux',
-                              }]
-                 }
-        self.assertEqual(res, expect)
+        req = fakes.HTTPRequest.blank('/fake/servers/detail')
+        res = req.get_response(self.app)
+        servers = jsonutils.loads(res.body)['servers']
+        for server in servers:
+            if server['id'] == self.uuid_1:
+                self.assertScheduledImages(server, '6', is_present=True)
+            else:
+                self.assertScheduledImages(server, '6', is_present=False)
 
     def test_detail_servers_with_true_query(self):
         query = 'OS-SI:image_schedule=True'
-        req = fakes.HTTPRequest.blank('/v2/123/servers/detail?%s' % query)
-        resp_obj = {'servers': [{'id': self.uuid_1, 'foo': 'bar'},
-                                {'id': self.uuid_2, 'baz': 'qux'}]}
-        res = self.controller.detail(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_1,
-                               'OS-SI:image_schedule': '6',
-                               'foo': 'bar',
-                              }]
-                 }
-        self.assertEqual(res, expect)
+        req = fakes.HTTPRequest.blank('/fake/servers/detail?%s' % query)
+        res = req.get_response(self.app)
+        servers = jsonutils.loads(res.body)['servers']
+        for server in servers:
+            self.assertScheduledImages(server, '6', is_present=True)
 
     def test_detail_servers_with_false_query(self):
         query = 'OS-SI:image_schedule=False'
-        req = fakes.HTTPRequest.blank('/v2/123/servers/detail?%s' % query)
-        resp_obj = {'servers': [{'id': self.uuid_1, 'foo': 'bar'},
-                                {'id': self.uuid_2, 'baz': 'qux'}]}
-        res = self.controller.detail(req, resp_obj)
-        expect = {'servers': [{'id': self.uuid_2,
-                               'baz': 'qux',
-                              }]
-                 }
-        self.assertEqual(res, expect)
+        req = fakes.HTTPRequest.blank('/fake/servers/detail?%s' % query)
+        res = req.get_response(self.app)
+        servers = jsonutils.loads(res.body)['servers']
+        for server in servers:
+            self.assertScheduledImages(server, '6', is_present=False)
+
+    def test_delete_server(self):
+        query = 'OS-SI:image_schedule=False'
+        req = fakes.HTTPRequest.blank('/fake/servers/%s' % self.uuid_2)
+        req.method = 'DELETE'
+        res = req.get_response(self.app)
+        self.assertEqual(res.status_int, 204)

@@ -263,7 +263,7 @@ class ScheduledImagesFilterController(wsgi.Controller):
     @wsgi.extends
     def delete(self, req, resp_obj, id):
         context = req.environ['nova.context']
-        if resp_obj.code == '202' and authorize_filter(context):
+        if resp_obj.code == '204' and authorize_filter(context):
             metadata = self._look_up_metadata(req, id)
             if metadata.get('OS-SI:image_schedule'):
                 del metadata['OS-SI:image_schedule']
@@ -271,7 +271,7 @@ class ScheduledImagesFilterController(wsgi.Controller):
                         server_id, metadata, True)
             self.client.delete_schedule(server_id)
         else:
-            LOG.info("Failed authorization for detail in scheduled images")
+            LOG.info("Failed authorization for delete in scheduled images")
 
 
 class Scheduled_images(extensions.ExtensionDescriptor):
