@@ -101,7 +101,7 @@ class ScheduledImagesController(wsgi.Controller):
 
         return webob.Response(status_int=202)
 
-    def _create_image_schedule(self, req):
+    def _create_image_schedule(self, req, server_id):
         tenant = req.environ['HTTP_X_TENANT_NAME']
         params = {'instance_id': server_id}
         schedules = self.client.list_schedules(filter_args=params)
@@ -152,7 +152,7 @@ class ScheduledImagesController(wsgi.Controller):
             raise exc.HTTPNotFound("The instance could not be found")
 
         try:
-            self._create_image_schedule(req)
+            self._create_image_schedule(req, server_id)
         except Exception:
             raise exc.HTTPInternalServerError()
         try:

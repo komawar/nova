@@ -103,7 +103,7 @@ class ScheduledImagesTest(test.TestCase):
         self.stubs.Set(qonos_client.Client, 'update_schedule',
                 fake_qonos_client_update_schedule)
 
-        def fake_scheduled_images_create_schedule(cls, req):
+        def fake_scheduled_images_create_schedule(cls, req, server_id):
             return
 
         cls = scheduled_images.ScheduledImagesController
