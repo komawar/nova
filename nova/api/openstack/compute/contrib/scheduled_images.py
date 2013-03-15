@@ -102,13 +102,13 @@ class ScheduledImagesController(wsgi.Controller):
         return webob.Response(status_int=202)
 
     def _create_image_schedule(self, req):
-        tenant_id = req.environ['HTTP_X_TENANT_ID']
+        tenant = req.environ['HTTP_X_TENANT_NAME']
         params = {'instance_id': server_id}
         schedules = self.client.list_schedules(filter_args=params)
         sch_body = {}
         body_metadata = {"instance_id": server_id}
         body_schedule = {
-                            "tenant": tenant_id,
+                            "tenant": tenant,
                             "action": "snapshot",
                             "minute": int(random.uniform(0, 59)),
                             "hour": int(random.uniform(0, 23)),
