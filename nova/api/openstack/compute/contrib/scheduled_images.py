@@ -105,6 +105,30 @@ class ScheduledImagesController(wsgi.Controller):
 
         return webob.Response(status_int=202)
 
+    def _create_image_schedule(self, req):
+        tenant_id = req.environ['HTTP_X_TENANT_ID']
+        params = {'instance_id': server_id}
+        #TODO(nikhil): add logic to check the validity of server_id, body
+        schedules = self.client.list_schedules(filter_args=params)
+        sch_body = {}
+        body_metadata = {"instance_id": server_id}
+        body_schedule = {
+                            "tenant": tenant_id,
+                            "action": "snapshot",
+                            "minute": int(random.uniform(0,59)),
+                            "hour": int(random.uniform(0,23)),
+                            "metadata": body_metadata,
+                        }
+        sch_body['schedule'] = body_schedule
+        if len(schedules) == 0:
+            schedule = self.client.create_schedule(sch_body)
+        elif len(schedules) == 1:
+            schedule = self.client.update_schedule(schedules[0]['id'], sch_body)
+        else:
+            #Note(nikhil): an instance can have at max one schedule
+            #return webob.Response(status_int=500)
+            raise exc.HTTPInternalServerError()
+
     def create(self, req, server_id, body):
         """Creates a new Schedule"""
         context = req.environ['nova.context']
@@ -132,27 +156,7 @@ class ScheduledImagesController(wsgi.Controller):
             raise exc.HTTPNotFound("The instance could not be found")
 
         try:
-            tenant_id = req.environ['HTTP_X_TENANT_ID']
-            params = {'instance_id': server_id}
-            #TODO(nikhil): add logic to check the validity of server_id, body
-            schedules = self.client.list_schedules(filter_args=params)
-            sch_body = {}
-            body_metadata = {"instance_id": server_id}
-            body_schedule = {"tenant": tenant_id,
-                             "action": "snapshot",
-                             "minute": int(random.uniform(0,59)),
-                             "hour": int(random.uniform(0,23)),
-                             "metadata": body_metadata,
-                        }
-            sch_body['schedule'] = body_schedule
-            if len(schedules) == 0:
-                schedule = self.client.create_schedule(sch_body)
-            elif len(schedules) == 1:
-                schedule = self.client.update_schedule(schedules[0]['id'], sch_body)
-            else:
-                #Note(nikhil): an instance can have at max one schedule
-                #return webob.Response(status_int=500)
-                raise exc.HTTPInternalServerError()
+            self._create_image_schedule(req)
         except:
             #return webob.Response(status_int=500)
             raise exc.HTTPInternalServerError()

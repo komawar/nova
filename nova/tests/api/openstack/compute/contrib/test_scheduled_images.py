@@ -28,6 +28,7 @@ from nova.openstack.common import jsonutils
 from nova.openstack.common import policy
 from nova import test
 from nova.tests.api.openstack import fakes
+from qonos.qonosclient import client as qonos_client
 
 
 OS_SI = 'OS-SI:image_schedule'
@@ -37,27 +38,16 @@ class ScheduledImagesPolicyTest(test.TestCase):
     def setUp(self):
         super(ScheduledImagesPolicyTest, self).setUp()
         self.controller = scheduled_images.ScheduledImagesController()
-
-    def test_get_image_schedule_restricted_by_project(self):
-        rules = policy.Rules({'compute:get': policy.parse_rule(''),
-                              'compute_extension:scheduled_images':
-                               policy.parse_rule('project_id:%(project_id)s')})
-        policy.set_rules(rules)
-
-        def fake_instance_system_metadata_get(context, instance_id):
-            return {'OS-SI:image_schedule': '7'}
-
-        self.stubs.Set(db, 'instance_system_metadata_get',
-                fake_instance_system_metadata_get)
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
-        self.assertRaises(exception.NotAuthorized, self.controller.index, req,
-                          str(uuid.uuid4()))
-
-    def test_post_image_schedule_restricted_by_project(self):
-        rules = policy.Rules({'compute:get': policy.parse_rule(''),
-                              'compute_extension:scheduled_images':
-                               policy.parse_rule('project_id:%(project_id)s')})
-        policy.set_rules(rules)
+        self.uuid_1 = 'b04ac9cd-f78f-4376-8606-99f3bdb5d0ae'
+        self.uuid_2 = '6b8b2aa4-ae7b-4cd0-a7f9-7fa6d5b0195a'
+        FAKE_INSTANCES = [
+            fakes.stub_instance(1,
+                                uuid=self.uuid_1,
+                                auto_disk_config=False),
+            fakes.stub_instance(2,
+                                uuid=self.uuid_2,
+                                auto_disk_config=True)
+        ]
 
         def fake_instance_system_metadata_get(context, instance_id):
             return {'OS-SI:image_schedule': '6'}
@@ -70,13 +60,67 @@ class ScheduledImagesPolicyTest(test.TestCase):
                 fake_instance_system_metadata_get)
         self.stubs.Set(db, 'instance_system_metadata_update',
                 fake_instance_system_metadata_update)
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
-        req.method = 'POST'
-        req.content_type = 'application/json'
+
+        def fake_instance_get_by_uuid(context, uuid):
+            for instance in FAKE_INSTANCES:
+                if uuid == instance['uuid']:
+                    return instance
+
+        self.stubs.Set(db, 'instance_get_by_uuid',
+                       fake_instance_get_by_uuid)
+
+        def fake_qonos_client_list_schedules(cls, **kwargs):
+            schedules = [{'id': 1}, {'id': 2}]
+            return schedules
+
+        self.stubs.Set(qonos_client.Client, 'list_schedules',
+                fake_qonos_client_list_schedules)
+
+        def fake_qonos_client_create_schedule(cls, schedule):
+            return {}
+
+        self.stubs.Set(qonos_client.Client, 'create_schedule',
+                fake_qonos_client_create_schedule)
+
+        def fake_qonos_client_delete_schedule(cls, schedules):
+            return
+
+        self.stubs.Set(qonos_client.Client, 'delete_schedule',
+                fake_qonos_client_delete_schedule)
+
+        def fake_qonos_client_update_schedule(cls, schedules, sch_body):
+            return
+
+        self.stubs.Set(qonos_client.Client, 'update_schedule',
+                fake_qonos_client_update_schedule)
+
+        def fake_scheduled_images_create_schedule(cls, req):
+            return
+
+        cls = scheduled_images.ScheduledImagesController
+        self.stubs.Set(cls, '_create_image_schedule',
+                fake_scheduled_images_create_schedule)
+
+    def test_get_image_schedule_restricted_by_project(self):
+        rules = policy.Rules({'compute:get': policy.parse_rule(''),
+                              'compute_extension:scheduled_images':
+                               policy.parse_rule('project_id:%(project_id)s')})
+        policy.set_rules(rules)
+
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        self.assertRaises(exception.NotAuthorized, self.controller.index, req,
+                          self.uuid_1)
+
+    def test_post_image_schedule_restricted_by_project(self):
+        rules = policy.Rules({'compute:get': policy.parse_rule(''),
+                              'compute_extension:scheduled_images':
+                               policy.parse_rule('project_id:%(project_id)s')})
+        policy.set_rules(rules)
+
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
         body = {"image_schedule": {"retention": "7"}}
-        req.body = jsonutils.dumps(body)
         self.assertRaises(exception.NotAuthorized, self.controller.create, req,
-                          str(uuid.uuid4()))
+                          self.uuid_1, body)
 
     def test_delete_image_schedule_restricted_by_project(self):
         rules = policy.Rules({'compute:get': policy.parse_rule(''),
@@ -84,20 +128,10 @@ class ScheduledImagesPolicyTest(test.TestCase):
                                policy.parse_rule('project_id:%(project_id)s')})
         policy.set_rules(rules)
 
-        def fake_instance_system_metadata_get(context, instance_id):
-            return {'OS-SI:image_schedule': '7'}
-
-        def fake_instance_system_metadata_update(context, instance_id,
-                system_metadata, delete):
-            return {}
-
-        self.stubs.Set(db, 'instance_system_metadata_get',
-                fake_instance_system_metadata_get)
-        self.stubs.Set(db, 'instance_system_metadata_update',
-                fake_instance_system_metadata_update)
-        req = fakes.HTTPRequest.blank('/v2/123/servers/12/os-si-image-schedule')
+        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        req.method = 'DELETE'
         self.assertRaises(exception.NotAuthorized, self.controller.delete, req,
-                          str(uuid.uuid4()))
+                          self.uuid_1)
 
 
 class ScheduledImagesTest(test.TestCase):
@@ -151,6 +185,38 @@ class ScheduledImagesTest(test.TestCase):
         self.stubs.Set(db, 'instance_system_metadata_update',
                 fake_instance_system_metadata_update)
 
+        def fake_qonos_client_list_schedules(cls, **kwargs):
+            schedules = [{'id': 1}, {'id': 2}]
+            return schedules
+
+        self.stubs.Set(qonos_client.Client, 'list_schedules',
+                fake_qonos_client_list_schedules)
+
+        def fake_qonos_client_create_schedule(cls, schedule):
+            return {}
+
+        self.stubs.Set(qonos_client.Client, 'create_schedule',
+                fake_qonos_client_create_schedule)
+
+        def fake_qonos_client_delete_schedule(cls, schedules):
+            return
+
+        self.stubs.Set(qonos_client.Client, 'delete_schedule',
+                fake_qonos_client_delete_schedule)
+
+        def fake_qonos_client_update_schedule(cls, schedules, sch_body):
+            return
+
+        self.stubs.Set(qonos_client.Client, 'update_schedule',
+                fake_qonos_client_update_schedule)
+
+        def fake_scheduled_images_create_schedule(cls, req):
+            return
+
+        cls = scheduled_images.ScheduledImagesController
+        self.stubs.Set(cls, '_create_image_schedule',
+                fake_scheduled_images_create_schedule)
+
     def test_get_image_schedule(self):
         req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
         res = self.controller.index(req, self.uuid_1)
@@ -164,6 +230,7 @@ class ScheduledImagesTest(test.TestCase):
 
     def test_delete_image_schedule(self):
         req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        req.method = 'DELETE'
         res = self.controller.delete(req, self.uuid_1)
         self.assertEqual(res.status_int, 202)
 
