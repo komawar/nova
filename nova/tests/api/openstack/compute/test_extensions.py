@@ -194,7 +194,6 @@ class ExtensionControllerTest(ExtensionTestCase):
             "Quotas",
             "Rescue",
             "SchedulerHints",
-            "ScheduledImages",
             "SecurityGroupDefaultRules",
             "SecurityGroups",
             "ServerDiagnostics",

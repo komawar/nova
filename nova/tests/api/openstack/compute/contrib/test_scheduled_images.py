@@ -13,19 +13,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import copy
-import uuid
-
-from lxml import etree
-from webob import exc
-
-from nova.compute import api as compute_api
 from nova.api.openstack import compute
 from nova.api.openstack.compute.contrib import scheduled_images
+from nova.compute import api as compute_api
 from nova import db
-from nova import exception
 from nova.openstack.common import jsonutils
-from nova.openstack.common import policy
 from nova import test
 from nova.tests.api.openstack import fakes
 from qonos.qonosclient import client as qonos_client
@@ -78,6 +70,7 @@ class ScheduledImagesTest(test.TestCase):
                 fake_instance_system_metadata_get)
 
         meta = {"OS-SI:image_schedule": "7"}
+
         def fake_instance_system_metadata_update(context, instance_id, meta,
                                                  delete):
             return {'OS-SI:image_schedule': '7'}
@@ -118,18 +111,21 @@ class ScheduledImagesTest(test.TestCase):
                 fake_scheduled_images_create_schedule)
 
     def test_get_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        url = '/fake/servers/%s/os-si-image-schedule' % self.uuid_1
+        req = fakes.HTTPRequest.blank(url)
         res = self.controller.index(req, self.uuid_1)
         self.assertEqual(res, {"image_schedule": {"retention": "6"}})
 
     def test_post_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        url = '/fake/servers/%s/os-si-image-schedule' % self.uuid_1
+        req = fakes.HTTPRequest.blank(url)
         body = {"image_schedule": {"retention": "7"}}
         res = self.controller.create(req, self.uuid_1, body)
         self.assertEqual(res, {"image_schedule": {"retention": "7"}})
 
     def test_delete_image_schedule(self):
-        req = fakes.HTTPRequest.blank('/fake/servers/%s/os-si-image-schedule' % self.uuid_1)
+        url = '/fake/servers/%s/os-si-image-schedule' % self.uuid_1
+        req = fakes.HTTPRequest.blank(url)
         req.method = 'DELETE'
         res = self.controller.delete(req, self.uuid_1)
         self.assertEqual(res.status_int, 202)
@@ -203,7 +199,7 @@ class ScheduledImagesFilterTest(test.TestCase):
         self.app = compute.APIRouter(init_only=('servers'))
 
         def fake_instance_system_metadata_get(context, instance_id):
-            if instance_id==self.uuid_1:
+            if instance_id == self.uuid_1:
                 return {'OS-SI:image_schedule': '6'}
             else:
                 return {}
@@ -212,9 +208,10 @@ class ScheduledImagesFilterTest(test.TestCase):
                 fake_instance_system_metadata_get)
 
         meta = {"OS-SI:image_schedule": "7"}
+
         def fake_instance_system_metadata_update(context, instance_id, meta,
                                                  delete):
-            if instance_id==self.uuid_1:
+            if instance_id == self.uuid_1:
                 return {'OS-SI:image_schedule': '7'}
             else:
                 return {}
